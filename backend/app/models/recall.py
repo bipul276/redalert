@@ -12,7 +12,9 @@ class RecallBase(SQLModel):
     hazard_summary: Optional[str] = None
     official_action: Optional[str] = None
     confidence_level: ConfidenceLevel = ConfidenceLevel.WATCH
+    signal_type: Optional[str] = None # India-specific: "Sample Failure", "Regulatory Action", etc.
     url: Optional[str] = None
+    published_date: Optional[datetime] = None # The actual date of the news/recall
 
 class Recall(RecallBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

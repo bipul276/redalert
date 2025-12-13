@@ -21,7 +21,17 @@ async def run_ingestion_cycle():
     
     # 1. Define Sources
     sources = [
-        ("https://news.google.com/rss/search?q=product+recall+india+when:7d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN"),
+        # Broad India Sources
+        ("https://news.google.com/rss/search?q=product+recall+india+when:15d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN-General"),
+        # Regulatory & Specific Signals
+        ("https://news.google.com/rss/search?q=FSSAI+unsafe+sample+when:15d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN-FSSAI"),
+        ("https://news.google.com/rss/search?q=food+safety+sample+failed+when:15d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN-FoodSafety"),
+        ("https://news.google.com/rss/search?q=CDSCO+alert+drug+when:15d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN-CDSCO"),
+        ("https://news.google.com/rss/search?q=drug+licence+cancelled+india+when:15d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN-Pharma"),
+        ("https://news.google.com/rss/search?q=food+safety+seizure+india+when:15d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN-Seizure"),
+        ("https://news.google.com/rss/search?q=WHO+medical+product+alert+India+when:30d&hl=en-IN&gl=IN&ceid=IN:en", "GoogleNews-IN-WHO"),
+        
+        # US Source (Unchanged)
         ("https://news.google.com/rss/search?q=product+recall+usa+when:7d&hl=en-US&gl=US&ceid=US:en", "GoogleNews-US")
     ]
     
@@ -36,6 +46,9 @@ async def run_ingestion_cycle():
                 total_fetched += len(items)
                 
                 for item in items:
+                    # Inject Source Origin for Processor
+                    item["_source_origin"] = source_name
+                    
                     payload_str = json.dumps(item)
                     source_id = hashlib.md5(payload_str.encode()).hexdigest()
                     
@@ -58,7 +71,7 @@ async def run_ingestion_cycle():
     # 3. Process into Canonical Recalls
     try:
         processor = RecallProcessor()
-        count = await processor.process_raw_recalls(limit=50) # Process batch
+        count = await processor.process_raw_recalls(limit=500) # Process larger batch for initial load
         logger.info(f"✅ Processed {count} new canonical recalls.")
     except Exception as e:
         logger.error(f"Error processing recalls: {e}")

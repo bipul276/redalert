@@ -1,15 +1,29 @@
 import { RecallCard } from "@/components/ui/RecallCard";
 import { fetchRecalls, Recall } from "@/lib/api";
 import { fetchWatchlists, WatchlistItem } from "@/lib/api_watchlist";
+import { FilterBar } from "@/components/ui/FilterBar";
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string; region?: string }> }) {
+export default async function Home({ searchParams }: {
+    searchParams: Promise<{
+        q?: string;
+        region?: string;
+        start_date?: string;
+        end_date?: string;
+        status?: string | string[];
+        signal_type?: string | string[];
+    }>
+}) {
     const params = await searchParams;
     const query = params.q;
     const region = params.region;
 
+    // Normalize params (Next.js can return string or array)
+    const status = Array.isArray(params.status) ? params.status : params.status ? [params.status] : [];
+    const signalType = Array.isArray(params.signal_type) ? params.signal_type : params.signal_type ? [params.signal_type] : [];
+
     // Parallel fetch for recalls and watchlist
     const [recalls, watchlist] = await Promise.all([
-        fetchRecalls(region, query),
+        fetchRecalls(region, query, params.start_date, params.end_date, status, signalType),
         fetchWatchlists() // Fetch user's tracked items
     ]);
 
@@ -62,12 +76,24 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                 </form>
             </section>
 
-            {/* Filters (Neutral/Polished UI) */}
-            <div className="flex flex-wrap gap-3 justify-center">
-                <a href="/" className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${!region ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'}`}>All Regions</a>
-                <a href="/?region=US" className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${region === 'US' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'}`}>US Only</a>
-                <a href="/?region=IN" className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${region === 'IN' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'}`}>India Only</a>
+            {/* Filter Bar */}
+            <div className="pb-4">
+                <FilterBar />
             </div>
+
+
+
+            {/* India Context Helper */}
+            {region === 'IN' && (
+                <div className="mx-auto max-w-2xl bg-amber-500/10 border border-amber-500/20 p-3 rounded-md flex gap-3 text-sm text-amber-600/90 items-start">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 flex-shrink-0 mt-0.5">
+                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
+                    </svg>
+                    <span>
+                        <strong>India Safety Context:</strong> Includes regulatory actions (seizures, licence cancellations) and investigation probes. Not all issues are formally labeled as "recalls".
+                    </span>
+                </div>
+            )}
 
             {/* SECTION 1: Matches your tracking */}
             {watchlist && watchlist.length > 0 && (
@@ -86,8 +112,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                                     id: item.id.toString(),
                                     title: item.title,
                                     brand: item.brand || "Unknown Brand",
-                                    date: new Date(item.updated_at).toLocaleDateString(),
+                                    date: new Date(item.published_date || item.updated_at).toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }),
                                     status: item.confidence_level.toLowerCase() as any,
+                                    signal_type: item.signal_type,
                                     hazard: item.hazard_summary?.substring(0, 100) + "..."
                                 }} />
                             ))}
@@ -102,7 +129,49 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
 
             {/* SECTION 2: General Recalls */}
             <div className="space-y-6">
-                {watchlist && watchlist.length > 0 && (
+
+                {/* Result Summary & Chips (User Feedback) */}
+                {(region || status.length > 0 || signalType.length > 0 || params.start_date) && (
+                    <div className="flex flex-col gap-2 border-b border-border/40 pb-4">
+                        <p className="text-sm font-medium text-muted-foreground">
+                            Showing <span className="text-foreground font-bold">{otherRecalls.length + trackedRecalls.length}</span> alerts matching your filters:
+                        </p>
+
+                        {/* Active Chips Row */}
+                        <div className="flex flex-wrap gap-2">
+                            {/* Region Chip */}
+                            {region && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                    {region === 'IN' ? '🇮🇳 India Only' : region === 'US' ? '🇺🇸 US Only' : region}
+                                </span>
+                            )}
+
+                            {/* Date Chip */}
+                            {params.start_date && (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background border border-border text-foreground">
+                                    📅 {new Date(params.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {params.end_date ? new Date(params.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Now'}
+                                </span>
+                            )}
+
+                            {/* Status Chips */}
+                            {status.map(s => (
+                                <span key={s} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background border border-border text-foreground capitalize">
+                                    {s.toLowerCase()}
+                                </span>
+                            ))}
+
+                            {/* Signal Chips */}
+                            {signalType.map(s => (
+                                <span key={s} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-background border border-border text-foreground">
+                                    {s}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Fallback Header if no specific filters but watchlist exists */}
+                {!region && status.length === 0 && trackedRecalls.length > 0 && (
                     <div className="flex items-center gap-2 border-b pb-2">
                         <h3 className="text-lg font-semibold tracking-tight text-muted-foreground">Showing the latest verified safety recalls</h3>
                     </div>
@@ -114,8 +183,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ q
                             id: item.id.toString(),
                             title: item.title,
                             brand: item.brand || "Unknown Brand",
-                            date: new Date(item.updated_at).toLocaleDateString(),
+                            date: new Date(item.published_date || item.updated_at).toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }),
                             status: item.confidence_level.toLowerCase() as any,
+                            signal_type: item.signal_type,
                             hazard: item.hazard_summary?.substring(0, 100) + "..."
                         }} />
                     ))}

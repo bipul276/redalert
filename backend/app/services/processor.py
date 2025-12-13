@@ -6,7 +6,8 @@ from app.core.database import engine
 from app.models.recall import RawRecall, Recall, RecallSource
 from app.nlp.engine import NLPEngine
 from app.scoring.confidence import ConfidenceScorer
-from app.core.constants import Region
+from app.core.constants import Region, ConfidenceLevel
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -51,28 +52,135 @@ class RecallProcessor:
                     # Extract entities (basic regex from NLP engine)
                     analysis["entities"] = NLPEngine.extract_entity_candidates(full_text)
                     
-                    # 3. Confidence Scoring
-                    score = ConfidenceScorer.calculate_score(raw.source_type, analysis)
-                    confidence = ConfidenceScorer.get_bucket(score)
+                    # 3. Signals & Region Logic
+                    # Check internal source tag OR NLP
+                    source_origin = payload.get("_source_origin", "")
+                    is_india_source = "IN" in source_origin or "India" in source_origin
                     
-                    # 4. Region Logic
-                    region = Region.IN if analysis["is_india"] else Region.US # Default to US/Global for now
-                    if raw.source_type == "GOV" and "india" not in full_text.lower():
-                         # CPSC/NHTSA/FDA are US by default unless specified
-                         region = Region.US
+                    # Foreign Exclusion Logic
+                    # Google News India feed often contains global news.
+                    # We must filter these out explicitly.
+                    # Case-insensitive blocklist (Foreign + Political)
+                    foreign_keywords = [
+                        "usa", "u.s.", "united states", "canada", "ontario", "toronto", "vancouver", "montreal",
+                        "nigeria", "africa", "japan", "australia", "sydney", "melbourne", "brisbane",
+                        "uk", "united kingdom", "london", "dublin", "ireland", "new zealand", "europe",
+                        "fda", "cpsc", "hsa", "singapore", "tga", "california", "texas",
+                        "venezuela", "maduro", "white house", "sanctions", "oil tanker", "shipping firms",
+                        "russia", "ukraine", "war", "military", "army", "navy", "air force", "troops", "deployed"
+                    ]
+                    
+                    lower_full_text = full_text.lower()
+                    has_foreign_mention = any(fk in lower_full_text for fk in foreign_keywords)
+                    
+                    # Logic Fix: Using injected source origin heavily, BUT filtering out foreign
+                    if (analysis["is_india"] or is_india_source) and not has_foreign_mention:
+                        region = Region.IN
+                    else:
+                        region = Region.US
+                    
+                    # DEBUG LOG
+                    if "IN" in source_origin and region == Region.US:
+                         logger.info(f"🧐 Filtered Non-India Item {raw.id}: Origin='{source_origin}' Foreign/Political Key Found -> Region=US")
+                    
+                    # Signal Logic (India Specific)
+                    signal_type = None
+                    confidence = ConfidenceLevel.WATCH # Default
 
-                    # 5. Create Canonical Recall
-                    # Check duplicate by title (MVP dedup)
-                    existing = session.exec(select(Recall).where(Recall.title == title)).first()
+                    # US Defaults
+                    if region == Region.US:
+                         score = ConfidenceScorer.calculate_score(raw.source_type, analysis)
+                         confidence = ConfidenceScorer.get_bucket(score)
+                    else:
+                        # INDIA SIGNAL LADDER
+                        lower_text = full_text.lower()
+                        
+                        # A. Define Signals
+                        if any(k in lower_text for k in ["ban", "banned", "cancelled", "suspended", "seized", "ordered to withdraw"]):
+                            signal_type = "Regulatory Action"
+                        elif any(k in lower_text for k in ["sample failed", "substandard", "not of standard quality", "adulterated", "unsafe"]):
+                            signal_type = "Sample Failure"
+                        elif any(k in lower_text for k in ["probe", "investigation", "complaint", "show cause"]):
+                            signal_type = "Investigation"
+                        elif "recall" in lower_text:
+                            signal_type = "Recall"
+                        
+                        # B. Assign Confidence based on Signal
+                        if signal_type == "Regulatory Action":
+                            confidence = ConfidenceLevel.CONFIRMED
+                        elif signal_type == "Sample Failure":
+                            confidence = ConfidenceLevel.PROBABLE
+                        elif signal_type == "Recall": 
+                             confidence = ConfidenceLevel.CONFIRMED
+                        else:
+                            # Investigations or weak signals -> Watch
+                             signal_type = signal_type or "Investigation" # Default
+                             confidence = ConfidenceLevel.WATCH
                     
-                    if not existing:
+                    # 4. Create Canonical Recall
+                    # Fuzzy Deduplication (MVP)
+                    # Fetch candidates to compare (optimize by filtering by date/region in real app)
+                    candidates = session.exec(select(Recall).where(Recall.region == region)).all()
+                    
+                    from difflib import SequenceMatcher
+                    
+                    existing_recall = None
+                    for cand in candidates:
+                        # Check 1: Brand exact match AND significant title overlap
+                        # Check 2: High title similarity ratio (> 0.7)
+                        ratio = SequenceMatcher(None, title.lower(), cand.title.lower()).ratio()
+                        
+                        # Basic Token Overlap for "Patanjali Ghee" cases
+                        # IF brand in both AND "unsafe"/"failed" in both...
+                        
+                        if ratio > 0.65: # Threshold
+                            existing_recall = cand
+                            break
+                    
+                    from email.utils import parsedate_to_datetime
+                    
+                    # Date Extraction
+                    pub_date = None
+                    raw_date = payload.get("published") or payload.get("pubDate") or payload.get("date") or payload.get("published_at")
+                    
+                    if raw_date:
+                        try:
+                            # Try ISO first (common in JSON APIs)
+                            pub_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                        except ValueError:
+                            try:
+                                # Try RSS/Email format (common in Feedparser)
+                                pub_date = parsedate_to_datetime(raw_date)
+                            except Exception:
+                                logger.warning(f"Could not parse date: {raw_date}")
+                                pub_date = None
+
+                    # ...
+                    
+                    if existing_recall:
+                        # MERGE: Add as new source to existing recall
+                        # Check if this source URL already exists to avoid double counting
+                        existing_source = session.exec(select(RecallSource).where(RecallSource.recall_id == existing_recall.id).where(RecallSource.url == payload.get("link"))).first()
+                        if not existing_source:
+                            source = RecallSource(
+                                recall_id=existing_recall.id,
+                                source_type=raw.source_type,
+                                url=payload.get("link", payload.get("url", "#")),
+                                title=title
+                            )
+                            session.add(source)
+                            logger.info(f"Merged duplicate into Recall {existing_recall.id}: {title}")
+                    else:
+                        # CREATE NEW
                         recall = Recall(
                             title=title,
-                            hazard_summary=desc[:500], # Truncate for MVP
+                            hazard_summary=desc[:500],
                             region=region,
                             confidence_level=confidence,
+                            signal_type=signal_type, 
                             brand=analysis["entities"][0] if analysis["entities"] else None,
-                            url=payload.get("link", payload.get("url", "#"))
+                            url=payload.get("link", payload.get("url", "#")),
+                            published_date=pub_date
                         )
                         session.add(recall)
                         session.commit()
@@ -87,7 +195,7 @@ class RecallProcessor:
                         )
                         session.add(source)
                         processed_count += 1
-                        logger.info(f"Created Recall: {title} [{confidence}]")
+                        logger.info(f"Created Recall: {title} [{confidence}] Signal: {signal_type}")
 
                         # 6. MATCHING ENGINE (Phase 5)
                         await self.check_matches(session, recall)
@@ -101,6 +209,7 @@ class RecallProcessor:
     async def check_matches(self, session: Session, recall: Recall):
         from app.models.user import Watchlist
         from app.services.notifier import notifier
+        from app.models.user import User # Added missing import
         
         # Simple exact match on Brand or loose match on Title
         # 1. Fetch all active watchlists
@@ -123,9 +232,10 @@ class RecallProcessor:
                 if user:
                     await notifier.notify_user_alert(user, recall.title, w.value)
 
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    import asyncio
     processor = RecallProcessor()
-    count = processor.process_raw_recalls()
+    # Mocking async run for script
+    count = asyncio.run(processor.process_raw_recalls())
     print(f"Processed {count} new canonical recalls.")
