@@ -1,0 +1,34 @@
+# General
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+*.db
+*.sqlite3
+backend/redalert_*.db
+.env
+.env.local
+
+# Node / Frontend
+node_modules/
+.next/
+out/
+build/
+dist/
+.npm/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Docker
+.docker/
