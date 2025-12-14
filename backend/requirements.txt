@@ -1,7 +1,8 @@
 fastapi==0.109.0
 uvicorn==0.27.0
 sqlmodel==0.0.14
-psycopg2-binary==2.9.9 # Required for Postgres (Production)
+psycopg2-binary==2.9.9 # Required for Postgres (Legacy)
+psycopg[binary] # Modern Postgres driver
 alembic==1.13.1
 # spacy==3.7.2 # Deferred to Phase 3
 feedparser==6.0.10
@@ -9,3 +10,9 @@ httpx==0.26.0
 python-multipart==0.0.6
 pydantic-settings==2.1.0
 apscheduler==3.10.4
+pyotp==2.9.0
+python-jose[cryptography]==3.3.0
+passlib[argon2]
+argon2-cffi
+cryptography==42.0.0
+qrcode[pil]==7.4.2

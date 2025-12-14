@@ -1,111 +1,110 @@
 # RedAlert 🚨
-**A Unified Product Safety & Recall Hub for the US & India**
+**Unified Product Safety & Recall Intelligence Platform**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Status](https://img.shields.io/badge/status-Production%20Ready-green.svg)
-![Stack](https://img.shields.io/badge/stack-Next.js%20%7C%20FastAPI%20%7C%20SQLite-orange.svg)
+![Stack](https://img.shields.io/badge/tech-Next.js%20%7C%20FastAPI%20%7C%20Postgres-orange.svg)
 
-**RedAlert** aggregates, standardizes, and scores product safety alerts from government bodies and trusted news sources, providing a single source of truth for safe consumption.
-
-![Project Screenshot](https://via.placeholder.com/800x400.png?text=RedAlert+Dashboard+Preview)
+RedAlert aggregates, standardizes, and scores product safety alerts from government bodies (US & India) and news sources, providing a single source of truth for safe consumption.
 
 ---
 
-## 🌟 Capabilities
+## 🌟 Key Features
 
 ### 🌍 Multi-Region Intelligence
-- **USA**: Direct integration with **CPSC** (Consumer Products), **FDA** (Food/Drugs), and **NHTSA** (Vehicles).
-- **India**: First-of-its-kind NLP pipeline to detect safety signals ("Unsafe", "Banned", "Seized") from **Google News** and publisher feeds.
+*   **USA**: Direct integration with **CPSC**, **FDA**, and **NHTSA**.
+*   **India**: NLP pipeline detecting signals ("Unsafe", "Banned", "Seized") from **Google News**, **FSSAI**, and **CDSCO**.
 
-### 🧠 Smarter Scoring
-We don't just dump data. Each alert is processed through our **Confidence Engine**:
-- **CONFIRMED**: Official government recall or regulatory order.
-- **PROBABLE**: High-confidence report from multiple major news outlets.
-- **WATCH**: Early investigation or isolated report.
+### 🧠 Confidence Engine
+*   **Confirmed**: Official regulatory orders.
+*   **Probable**: Validated reports from multiple major outlets.
+*   **Watch**: Early investigations or unverified reports.
 
-### 🎯 Precision Filtering
-- **Time Travel**: Filter by *actual* news publication date (`Start` / `End` Date).
-- **Refined Taxonomy**: Drill down by signal type ("Regulatory Action", "Sample Failure") or severity.
-- **Deduplication**: Proprietary fuzzy matching merges duplicate stories into single canonical alerts.
-
----
-
-## 🛠️ Technology Stack
-
-- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, Lucide Icons.
-- **Backend**: Python 3.11+, FastAPI, SQLModel (SQLAlchemy), FeedParser.
-- **Database**: SQLite (Production-ready via SQLModel, easily scalable to Postgres).
-- **NLP**: Custom heuristic engine for signal detection and entity extraction.
+### 🛡️ Admin & Security
+*   **Secure Admin Panel**: Manage recalls, approve data, and handle users.
+*   **2FA Protection**: Admin routes secured via TOTP (Authenticator App) and Argon2 hashing.
+*   **Automated Ingestion**: Background scheduler runs every 12 hours to fetch new data.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Deployment Guide
 
-### Prerequisites
-- Node.js 18+
-- Python 3.11+
+### Option 1: Docker (Recommended for Local/Production)
+Run the entire stack (Frontend + Backend + Database) with one command.
 
-### 1. Backend Setup
-The backend handles data ingestion, NLP processing, and the API.
+```bash
+docker-compose up --build
+```
+> App: `http://localhost:3000` | API: `http://localhost:8000`
 
+### Option 2: Manual Setup
+
+#### 1. Backend (Python/FastAPI)
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-.\venv\Scripts\activate  # Windows
-# source venv/bin/activate # Mac/Linux
+# Windows:
+.\venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Seed the Database (Fetches initial data)
-# This will ingest ~50 items from various sources
-python scripts/test_pipeline.py
+# Initialize DB & Create Admin
+python scripts/init_db.py
+python scripts/create_admin.py  # Interactive Setup (Scan QR Code)
 
-# Start the API Server
-uvicorn app.main:app --reload --port 8000
+# Start Server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
-> API will run at `http://localhost:8000`. Docs at `/docs`.
 
-### 2. Frontend Setup
-The frontend is a modern Next.js application.
-
+#### 2. Frontend (Next.js)
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start Development Server
-npm run dev
+npm run build
+npm start
 ```
-> App will run at `http://localhost:3000`.
 
 ---
 
-## 🧪 Verification & Testing
+## ⚙️ Configuration
 
-### Run Pipeline Verification
-To verify the entire data flow (Ingestion -> DB -> Scoring):
+Create a `.env` file in `backend/` (optional, defaults provided for dev).
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | Connection string | `sqlite:///./redalert_v4.db` |
+| `Totp encryption key` | Auto-generated in `.totp_key` | N/A |
+
+For Frontend (`frontend/.env.local`):
+| Variable | Desciption | Default |
+| :--- | :--- | :--- |
+| `NEXT_PUBLIC_API_URL` | Backend URL | `http://127.0.0.1:8000/api/v1` |
+
+---
+
+## 🔐 Admin Access
+
+1.  **Create Admin**: Run `python backend/scripts/create_admin.py`.
+2.  **Scan QR**: Use Google Authenticator or Authy.
+3.  **Login**: Go to `/admin` on the frontend. enter credentials + 6-digit code.
+
+---
+
+## 🤖 Automation
+
+The backend includes an **Async Scheduler** that runs every **12 hours** to:
+1.  Fetch latest RSS feeds from 8+ sources.
+2.  De-duplicate entries against existing database.
+3.  Process NLP signals and update confidence scores.
+
+To force a run manually:
 ```bash
-# From project root
-$env:PYTHONPATH="backend"; .\backend\venv\Scripts\python backend/scripts/test_pipeline.py
-```
-
-### Trigger Alert Simulation
-To simulate a user alert match:
-```bash
-$env:PYTHONPATH="backend"; .\backend\venv\Scripts\python backend/scripts/test_alert_flow.py
+# In backend/
+python scripts/restore_data.py
 ```
 
 ---
 
-## 🛡️ Disclaimer
-**RedAlert** aggregates publicly available information. It is not an official regulatory body.
-*   **Always** follow official manufacturer instructions.
-*   **Consult** professionals for medical or legal advice.
-*   We categorize signals based on available text; errors in source data may reflect in the feed.
-
----
-*Built with ❤️ for safer communities.*
+*Built for safer communities.*

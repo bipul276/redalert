@@ -15,7 +15,7 @@ export interface Recall {
     url?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
 
 export async function fetchRecalls(
     region?: string,
@@ -44,4 +44,75 @@ export async function fetchRecalls(
     }
 
     return res.json();
+}
+
+// --- AUTHENTICATION ---
+const TOKEN_KEY = "redalert_admin_token";
+
+export function getToken(): string | null {
+    if (typeof window !== "undefined") {
+        return localStorage.getItem(TOKEN_KEY);
+    }
+    return null;
+}
+
+export function logout() {
+    if (typeof window !== "undefined") {
+        localStorage.removeItem(TOKEN_KEY);
+        window.location.href = "/admin/login";
+    }
+}
+
+export async function login(email: string, pass: string, code: string): Promise<boolean> {
+    try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password: pass, totp_code: code }),
+        });
+
+        if (!res.ok) return false;
+
+        const data = await res.json();
+        if (data.access_token) {
+            localStorage.setItem(TOKEN_KEY, data.access_token);
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error("Login Error", e);
+        return false;
+    }
+}
+
+// --- ADMIN ACTIONS ---
+
+export async function updateRecall(id: number, data: Partial<Recall>): Promise<boolean> {
+    const token = getToken();
+    if (!token) return false;
+
+    const res = await fetch(`${API_BASE}/admin/${id}`, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(data)
+    });
+
+    return res.ok;
+}
+
+export async function deleteRecall(id: number): Promise<boolean> {
+    const token = getToken();
+    if (!token) return false;
+
+    const res = await fetch(`${API_BASE}/admin/${id}`, {
+        method: "DELETE",
+        headers: {
+            "Authorization": `Bearer ${token}`
+        }
+    });
+
+    return res.ok;
 }

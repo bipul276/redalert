@@ -4,12 +4,11 @@ from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.recall import Recall
 from app.core.constants import ConfidenceLevel, Region
+from app.api.deps import get_current_admin_user
+from app.models.user import User
 from pydantic import BaseModel
 
 router = APIRouter()
-
-# MVP Security: Simple shared secret
-ADMIN_SECRET = "redalert_admin_secret_123"
 
 class RecallUpdate(BaseModel):
     title: Optional[str] = None
@@ -19,16 +18,12 @@ class RecallUpdate(BaseModel):
     official_action: Optional[str] = None
     brand: Optional[str] = None
 
-def verify_admin(x_admin_secret: str = Header(...)):
-    if x_admin_secret != ADMIN_SECRET:
-        raise HTTPException(status_code=403, detail="Invalid Admin Secret")
-
 @router.patch("/{id}", response_model=Recall)
 def update_recall(
     id: int, 
     recall_update: RecallUpdate, 
     session: Session = Depends(get_session),
-    _: str = Depends(verify_admin)
+    current_admin: User = Depends(get_current_admin_user)
 ):
     recall = session.get(Recall, id)
     if not recall:
@@ -47,7 +42,7 @@ def update_recall(
 def delete_recall(
     id: int, 
     session: Session = Depends(get_session),
-    _: str = Depends(verify_admin)
+    current_admin: User = Depends(get_current_admin_user)
 ):
     recall = session.get(Recall, id)
     if not recall:

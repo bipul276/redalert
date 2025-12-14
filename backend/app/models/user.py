@@ -8,6 +8,17 @@ class User(SQLModel, table=True):
     hashed_password: str
     full_name: Optional[str] = None
     is_active: bool = Field(default=True)
+    is_superuser: bool = Field(default=False)
+    
+    # 2FA & Security
+    totp_secret_enc: Optional[str] = None # Encrypted
+    recovery_codes: Optional[str] = None # JSON list of hashed codes
+    
+    # Rate Limiting / Lockout
+    failed_login_attempts: int = Field(default=0)
+    last_failed_login: Optional[datetime] = None
+    locked_until: Optional[datetime] = None
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     watchlists: List["Watchlist"] = Relationship(back_populates="user")

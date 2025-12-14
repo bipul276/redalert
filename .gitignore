@@ -14,8 +14,10 @@ env/
 *.db
 *.sqlite3
 backend/redalert_*.db
+backend/redalert_*.db
 .env
 .env.local
+.totp_key
 
 # Node / Frontend
 node_modules/

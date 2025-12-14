@@ -1,5 +1,7 @@
 import logging
 import json
+import html
+import re
 from typing import List, Optional
 from sqlmodel import Session, select
 from app.core.database import engine
@@ -34,33 +36,42 @@ class RecallProcessor:
                     # 1. Parse Payload
                     payload = json.loads(raw.raw_payload)
                     
-                    # Unified Field extraction (very basic mapping)
-                    title = payload.get("title", "Unknown Title")
+                    # Unified Field extraction
+                    raw_title = payload.get("title", "Unknown Title")
+                    title = html.unescape(raw_title) # Fix &nbsp; and others
+                    
                     raw_desc = payload.get("summary", "") or payload.get("description", "")
                     
-                    import re
-                    def strip_tags(html):
-                        return re.sub(r'<[^>]+>', '', html)
+                    def strip_tags(html_text):
+                        return re.sub(r'<[^>]+>', '', html_text)
 
-                    desc = strip_tags(raw_desc)
+                    desc = strip_tags(html.unescape(raw_desc))
                     
                     # Combine text for NLP
                     full_text = f"{title} {desc}"
+                    lower_full_text = full_text.lower()
                     
+                    # NOISE FILTER (Explicit exclusion)
+                    noise_keywords = [
+                        "funding alert", "raised", "series a", "series b", "series c", "bags $", "mn round", # Finance
+                        "reviewed", "review:", "tested and reviewed", "best medical alert", "top 10", "buying guide", # Reviews
+                        "how it works", "how to", "feature update", "eligible for this", "watch face", "ios", "android" # Tech Tutorials
+                    ]
+                    
+                    if any(nk in lower_full_text for nk in noise_keywords):
+                        logger.info(f"🗑️ Skipped Noise: {title}")
+                        continue
+
                     # 2. NLP Analysis
                     analysis = NLPEngine.analyze_text(full_text)
                     # Extract entities (basic regex from NLP engine)
                     analysis["entities"] = NLPEngine.extract_entity_candidates(full_text)
                     
                     # 3. Signals & Region Logic
-                    # Check internal source tag OR NLP
                     source_origin = payload.get("_source_origin", "")
                     is_india_source = "IN" in source_origin or "India" in source_origin
                     
                     # Foreign Exclusion Logic
-                    # Google News India feed often contains global news.
-                    # We must filter these out explicitly.
-                    # Case-insensitive blocklist (Foreign + Political)
                     foreign_keywords = [
                         "usa", "u.s.", "united states", "canada", "ontario", "toronto", "vancouver", "montreal",
                         "nigeria", "africa", "japan", "australia", "sydney", "melbourne", "brisbane",
@@ -70,18 +81,12 @@ class RecallProcessor:
                         "russia", "ukraine", "war", "military", "army", "navy", "air force", "troops", "deployed"
                     ]
                     
-                    lower_full_text = full_text.lower()
                     has_foreign_mention = any(fk in lower_full_text for fk in foreign_keywords)
                     
-                    # Logic Fix: Using injected source origin heavily, BUT filtering out foreign
                     if (analysis["is_india"] or is_india_source) and not has_foreign_mention:
                         region = Region.IN
                     else:
                         region = Region.US
-                    
-                    # DEBUG LOG
-                    if "IN" in source_origin and region == Region.US:
-                         logger.info(f"🧐 Filtered Non-India Item {raw.id}: Origin='{source_origin}' Foreign/Political Key Found -> Region=US")
                     
                     # Signal Logic (India Specific)
                     signal_type = None
@@ -119,20 +124,13 @@ class RecallProcessor:
                     
                     # 4. Create Canonical Recall
                     # Fuzzy Deduplication (MVP)
-                    # Fetch candidates to compare (optimize by filtering by date/region in real app)
                     candidates = session.exec(select(Recall).where(Recall.region == region)).all()
                     
                     from difflib import SequenceMatcher
                     
                     existing_recall = None
                     for cand in candidates:
-                        # Check 1: Brand exact match AND significant title overlap
-                        # Check 2: High title similarity ratio (> 0.7)
                         ratio = SequenceMatcher(None, title.lower(), cand.title.lower()).ratio()
-                        
-                        # Basic Token Overlap for "Patanjali Ghee" cases
-                        # IF brand in both AND "unsafe"/"failed" in both...
-                        
                         if ratio > 0.65: # Threshold
                             existing_recall = cand
                             break
@@ -155,11 +153,8 @@ class RecallProcessor:
                                 logger.warning(f"Could not parse date: {raw_date}")
                                 pub_date = None
 
-                    # ...
-                    
                     if existing_recall:
                         # MERGE: Add as new source to existing recall
-                        # Check if this source URL already exists to avoid double counting
                         existing_source = session.exec(select(RecallSource).where(RecallSource.recall_id == existing_recall.id).where(RecallSource.url == payload.get("link"))).first()
                         if not existing_source:
                             source = RecallSource(
@@ -186,7 +181,6 @@ class RecallProcessor:
                         session.commit()
                         session.refresh(recall)
                         
-                        # Add Source Link
                         source = RecallSource(
                             recall_id=recall.id,
                             source_type=raw.source_type,
@@ -197,7 +191,7 @@ class RecallProcessor:
                         processed_count += 1
                         logger.info(f"Created Recall: {title} [{confidence}] Signal: {signal_type}")
 
-                        # 6. MATCHING ENGINE (Phase 5)
+                        # 6. MATCHING ENGINE
                         await self.check_matches(session, recall)
                     
                 except Exception as e:
@@ -209,11 +203,8 @@ class RecallProcessor:
     async def check_matches(self, session: Session, recall: Recall):
         from app.models.user import Watchlist
         from app.services.notifier import notifier
-        from app.models.user import User # Added missing import
+        from app.models.user import User
         
-        # Simple exact match on Brand or loose match on Title
-        # 1. Fetch all active watchlists
-        # Optimization: In real app, query filtering happen in DB
         watchlists = session.exec(select(Watchlist)).all()
         
         for w in watchlists:
@@ -224,10 +215,8 @@ class RecallProcessor:
                 match = True
                 
             if match:
-                # ALERT TRIGGERED
                 logger.info(f"!!! ALERT TRIGGERED !!! User {w.user_id} matched '{w.value}' in Recall '{recall.title}'")
                 
-                # Fetch user email
                 user = session.get(User, w.user_id)
                 if user:
                     await notifier.notify_user_alert(user, recall.title, w.value)
@@ -236,6 +225,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     import asyncio
     processor = RecallProcessor()
-    # Mocking async run for script
     count = asyncio.run(processor.process_raw_recalls())
     print(f"Processed {count} new canonical recalls.")

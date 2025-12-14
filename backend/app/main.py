@@ -29,6 +29,9 @@ app.add_middleware(
 app.include_router(recalls_router, prefix="/api/v1/recalls", tags=["recalls"])
 app.include_router(watchlists_router, prefix="/api/v1/watchlists", tags=["watchlists"])
 app.include_router(admin_router, prefix="/api/v1/admin", tags=["admin"])
+# Auth
+from app.api.routes_auth import router as auth_router
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 # Push Notifications
 from app.api.routes_push import router as push_router
 app.include_router(push_router, prefix="/api/v1/notifications", tags=["notifications"])
