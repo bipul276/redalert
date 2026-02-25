@@ -15,8 +15,10 @@ def read_recalls(
     q: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    status: Optional[List[str]] = Query(None), # Maps to confidence_level
+    status: Optional[List[str]] = Query(None),
     signal_type: Optional[List[str]] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     session: Session = Depends(get_session)
 ):
     statement = select(Recall)
@@ -25,14 +27,12 @@ def read_recalls(
         statement = statement.where(Recall.region == region)
         
     if q:
-        # Basic case-insensitive search
         statement = statement.where(Recall.title.ilike(f"%{q}%"))
 
     if start_date:
         statement = statement.where(Recall.created_at >= start_date)
         
     if end_date:
-        # Inclusive end date (up to 23:59:59 of that day)
         next_day = end_date + timedelta(days=1)
         statement = statement.where(Recall.created_at < next_day)
 
@@ -42,8 +42,11 @@ def read_recalls(
     if signal_type:
         statement = statement.where(Recall.signal_type.in_(signal_type))
     
-    # Always sort by newest first (descending ID/date)
+    # Always sort by newest first
     statement = statement.order_by(Recall.id.desc())
+    
+    # Pagination
+    statement = statement.offset(offset).limit(limit)
         
     return session.exec(statement).all()
 

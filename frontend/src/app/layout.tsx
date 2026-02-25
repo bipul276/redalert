@@ -39,7 +39,7 @@ export default function RootLayout({
                     <footer className="border-t py-6 text-center text-sm text-muted-foreground">
                         <div className="container mx-auto">
                             <p className="opacity-60">Aggregates public safety information. Always follow official manufacturer or government instructions.</p>
-                            <p className="mt-2 opacity-30">© 2025 RedAlert</p>
+                            <p className="mt-2 opacity-30">© 2026 RedAlert</p>
                         </div>
                     </footer>
                 </div>

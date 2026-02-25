@@ -5,11 +5,11 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.user import User
+from app.core.config import settings
 from jose import jwt, JWTError
-import os
 
-# CONFIG (Should match routes_auth)
-SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_jwt_key_change_me")
+# CONFIG — uses centralized settings
+SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")

@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.models.user import User
+from app.core.config import settings
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 import pyotp
@@ -15,8 +16,7 @@ from cryptography.fernet import Fernet as FernetCrypto
 router = APIRouter()
 
 # --- CONFIG ---
-# In prod, move to env vars!
-SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_jwt_key_change_me")
+SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 TOTP_ENC_KEY_PATH = ".totp_key"
@@ -84,7 +84,6 @@ def login(form_data: LoginRequest, session: Session = Depends(get_session)):
     # 1. Rate Limiting Check (Basic DB Logic)
     user = session.exec(select(User).where(User.email == form_data.email)).first()
     if not user:
-        # Fake delay to prevent enumeration? MVP: just fail.
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
     if user.locked_until and user.locked_until > datetime.utcnow():
@@ -92,17 +91,15 @@ def login(form_data: LoginRequest, session: Session = Depends(get_session)):
 
     # 2. Password Check
     if not verify_password(form_data.password, user.hashed_password):
-        # Bump invalid attempts
         user.failed_login_attempts += 1
         if user.failed_login_attempts >= 5:
             user.locked_until = datetime.utcnow() + timedelta(minutes=10)
-            user.failed_login_attempts = 0 # Reset count so after 10m they get 5 more? Or handle differently.
+            user.failed_login_attempts = 0
         session.add(user)
         session.commit()
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
     # 3. 2FA Check
-    # Normalize input
     code_input = form_data.totp_code.replace(" ", "").replace("-", "")
     
     is_valid_totp = False
@@ -112,7 +109,7 @@ def login(form_data: LoginRequest, session: Session = Depends(get_session)):
         try:
             secret = cipher.decrypt(user.totp_secret_enc.encode()).decode()
             totp = pyotp.TOTP(secret)
-            if totp.verify(code_input, valid_window=1): # Allow slight skew
+            if totp.verify(code_input, valid_window=1):
                 is_valid_totp = True
         except Exception:
             pass
@@ -124,7 +121,6 @@ def login(form_data: LoginRequest, session: Session = Depends(get_session)):
             for i, hashed_code in enumerate(codes):
                 if pwd_context.verify(code_input, hashed_code):
                     is_valid_totp = True
-                    # Burn code
                     codes.pop(i)
                     user.recovery_codes = json.dumps(codes)
                     session.add(user)

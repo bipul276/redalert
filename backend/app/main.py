@@ -1,3 +1,5 @@
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes_recalls import router as recalls_router
@@ -5,17 +7,35 @@ from app.api.routes_watchlists import router as watchlists_router
 from app.api.routes_admin import router as admin_router
 from app.core.config import settings
 from app.core.database import init_db
-from app.models.user import User, Watchlist # Import to register with SQLModel metadata used in init_db
+from app.models.user import User, Watchlist  # Import to register with SQLModel metadata used in init_db
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.services.scheduler_service import run_ingestion_cycle
+
+# --- Lifespan (replaces deprecated @app.on_event) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_db()
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(run_ingestion_cycle, "interval", hours=12)
+    scheduler.start()
+    print("🕒 Scheduler started: Ingestion pipeline runs every 12 hours.")
+    yield
+    # Shutdown
+    scheduler.shutdown()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Product Recall Alert Hub Backend",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS Configuration
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 origins = [
-    "http://localhost:3000",  # Next.js Frontend
+    "http://localhost:3000",
+    FRONTEND_URL,
 ]
 
 app.add_middleware(
@@ -36,19 +56,7 @@ app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 from app.api.routes_push import router as push_router
 app.include_router(push_router, prefix="/api/v1/notifications", tags=["notifications"])
 
-@app.on_event("startup")
-def on_startup():
-    init_db()
-    
-    # Start Scheduler
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from app.services.scheduler_service import run_ingestion_cycle
-    
-    scheduler = AsyncIOScheduler()
-    # Run every 12 hours
-    scheduler.add_job(run_ingestion_cycle, "interval", hours=12)
-    scheduler.start()
-    print("🕒 Scheduler started: Ingestion pipeline runs every 12 hours.")
+
 
 @app.get("/")
 def health_check():

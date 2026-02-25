@@ -1,3 +1,4 @@
+import os
 import logging
 import json
 from abc import ABC, abstractmethod
@@ -5,27 +6,15 @@ from app.models.user import User
 from sqlmodel import Session, select
 from app.core.database import engine
 from app.models.subscription import PushSubscription
-from pywebpush import webpush, WebPushException
 
 logger = logging.getLogger(__name__)
 
-# MVP VAPID Keys (Must match routes_push.py)
-VAPID_PRIVATE_KEY = "zAh.......PLACEHOLDER.......PRIVATE_KEY" # In real app, load from env
-# Generating a temporary valid pair for this session to ensure it actually works would be best,
-# but for "No Mocks" constraint I should try to make it runnable. 
-# However, without a real key pair generator, I might just mock the *delivery* confirmation if keys are invalid,
-# OR I can rely on the user to provide keys.
-# Let's try to stick to the 'LogEmailProvider' pattern for WebPush if keys aren't set, 
-# BUT the goal is "WebPush". 
-# Plan: I will implement the calls. If it fails due to keys, I catch and log.
-
+# VAPID Keys from environment
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_CLAIMS = {
-    "sub": "mailto:admin@redalert.example.com"
+    "sub": os.getenv("VAPID_MAILTO", "mailto:admin@redalert.example.com")
 }
-# Using a generated Key Pair for testing (These are fake but structurally valid-ish for demo code, 
-# normally you run `vapid --gen` or similar)
-VAPID_PUBLIC_KEY = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIuQRWV_Hw8a6E4DM"
-VAPID_PRIVATE_KEY = "PleaseReplaceWithRealPrivateKeyEncodedBase64URL"
 
 class BaseNotificationProvider(ABC):
     @abstractmethod
@@ -54,7 +43,13 @@ class NotificationService:
         self.send_webpush(user.id, recall_title)
 
     def send_webpush(self, user_id: int, message: str):
+        if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+            logger.warning("VAPID keys not configured — skipping push notification")
+            return
+            
         try:
+            from pywebpush import webpush, WebPushException
+            
             with Session(engine) as session:
                 subs = session.exec(select(PushSubscription).where(PushSubscription.user_id == user_id)).all()
                 for sub in subs:
@@ -67,17 +62,17 @@ class NotificationService:
                                     "auth": sub.auth
                                 }
                             },
-                            data=json.dumps({"title": "RedAlert Setup", "body": message}),
+                            data=json.dumps({"title": "RedAlert", "body": message}),
                             vapid_private_key=VAPID_PRIVATE_KEY,
                             vapid_claims=VAPID_CLAIMS
                         )
                         logger.info(f"Push sent to {sub.id}")
                     except WebPushException as ex:
                         logger.error(f"WebPush failed: {ex}")
-                        # If 410, delete sub
                     except Exception as e:
-                         # Likely invalid key in this dummy setup
-                         logger.warning(f"Push error (likely key config): {e}")
+                        logger.warning(f"Push error: {e}")
+        except ImportError:
+            logger.warning("pywebpush not installed — skipping push notifications")
         except Exception as outer_e:
             logger.error(f"Push db error: {outer_e}")
 

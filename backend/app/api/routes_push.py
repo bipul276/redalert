@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -7,21 +8,18 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# MVP VAPID Keys (Generated for this session)
-# In production -> ENV VARS
-VAPID_PUBLIC_KEY = "BK0s_q_R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a-R_a"
-# Note: Real VAPID generation is needed. I will use a valid format below.
-VAPID_PUBLIC_KEY = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIuQRWV_Hw8a6E4DM"
-VAPID_PRIVATE_KEY = "PREDEFINED_PRIVATE_KEY_WILL_BE_SET_IN_NOTIFIER" 
-# Ideally, we don't expose private key here, just need public for frontend.
+# VAPID Keys from environment variables
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 
 class SubscriptionRequest(BaseModel):
     endpoint: str
     keys: dict
-    user_id: int # Hardcoded for MVP
+    user_id: int
 
 @router.get("/vapid-public-key")
 def get_vapid_key():
+    if not VAPID_PUBLIC_KEY:
+        raise HTTPException(status_code=503, detail="Push notifications not configured")
     return {"publicKey": VAPID_PUBLIC_KEY}
 
 @router.post("/subscribe")

@@ -29,23 +29,12 @@ RedAlert aggregates, standardizes, and scores product safety alerts from governm
 
 ## 🚀 Deployment Guide
 
-### Option 1: Docker (Recommended for Local/Production)
-Run the entire stack (Frontend + Backend + Database) with one command.
-
-```bash
-docker-compose up --build
-```
-> App: `http://localhost:3000` | API: `http://localhost:8000`
-
-### Option 2: Manual Setup
+### Manual Setup (DigitalOcean Droplet)
 
 #### 1. Backend (Python/FastAPI)
 ```bash
 cd backend
 python -m venv venv
-# Windows:
-.\venv\Scripts\activate
-# Mac/Linux:
 source venv/bin/activate
 
 pip install -r requirements.txt
@@ -70,17 +59,24 @@ npm start
 
 ## ⚙️ Configuration
 
-Create a `.env` file in `backend/` (optional, defaults provided for dev).
+### Backend (`backend/.env`)
+
+| Variable | Description | Required |
+| :--- | :--- | :---: |
+| `DATABASE_URL` | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/redalert`) | ✅ |
+| `SECRET_KEY` | Random 64+ char string for JWT signing | ✅ |
+| `FRONTEND_URL` | Production frontend URL for CORS (e.g. `https://redalert.example.com`) | ✅ |
+| `VAPID_PUBLIC_KEY` | Web Push VAPID public key (generate with `vapid --gen`) | Optional |
+| `VAPID_PRIVATE_KEY` | Web Push VAPID private key | Optional |
+| `VAPID_MAILTO` | Contact email for VAPID claims | Optional |
+
+> **TOTP Encryption Key**: Auto-generated in `backend/.totp_key` on first admin creation. Keep this file safe.
+
+### Frontend (`frontend/.env.local`)
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `DATABASE_URL` | Connection string | `sqlite:///./redalert_v4.db` |
-| `Totp encryption key` | Auto-generated in `.totp_key` | N/A |
-
-For Frontend (`frontend/.env.local`):
-| Variable | Desciption | Default |
-| :--- | :--- | :--- |
-| `NEXT_PUBLIC_API_URL` | Backend URL | `http://127.0.0.1:8000/api/v1` |
+| `NEXT_PUBLIC_API_URL` | Backend API URL | `http://127.0.0.1:8000/api/v1` |
 
 ---
 
@@ -88,7 +84,7 @@ For Frontend (`frontend/.env.local`):
 
 1.  **Create Admin**: Run `python backend/scripts/create_admin.py`.
 2.  **Scan QR**: Use Google Authenticator or Authy.
-3.  **Login**: Go to `/admin` on the frontend. enter credentials + 6-digit code.
+3.  **Login**: Go to `/admin` on the frontend. Enter credentials + 6-digit code.
 
 ---
 
@@ -102,7 +98,7 @@ The backend includes an **Async Scheduler** that runs every **12 hours** to:
 To force a run manually:
 ```bash
 # In backend/
-python scripts/restore_data.py
+python scripts/trigger_real_data.py
 ```
 
 ---
