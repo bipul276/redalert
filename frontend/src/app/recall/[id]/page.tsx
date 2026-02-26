@@ -37,8 +37,10 @@ export default async function RecallDetailPage({ params }: { params: Promise<{ i
             {/* Header */}
             <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                    <Badge variant={data.confidence_level.toLowerCase() as any}>{data.confidence_level}</Badge>
-                    <span className="text-sm text-muted-foreground">{new Date(data.updated_at).toLocaleDateString()} • {data.region}</span>
+                    <Badge variant={data.confidence_level?.toLowerCase() as any || "watch"}>{data.confidence_level || 'WATCH'}</Badge>
+                    <span className="text-sm text-muted-foreground">
+                        {data.updated_at ? new Date(data.updated_at).toLocaleDateString() : 'Unknown Date'} • {data.region || 'Unknown Region'}
+                    </span>
                 </div>
                 <h1 className="text-3xl font-bold leading-tight text-foreground sm:text-4xl">
                     {data.title}
