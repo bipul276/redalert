@@ -64,6 +64,17 @@ class RecallProcessor:
 
                     # 2. NLP Analysis
                     analysis = NLPEngine.analyze_text(full_text)
+                    
+                    # STRICT FILTER: For India (which relies on broad news scraping), 
+                    # we ONLY care about food, medicine, and consumable safety. 
+                    # If it lacks context, drop it immediately to prevent political/general news.
+                    source_origin = payload.get("_source_origin", "")
+                    is_india_source = "IN" in source_origin or "India" in source_origin
+                    
+                    if (is_india_source or analysis["is_india"]) and not analysis["is_food_med"]:
+                        logger.info(f"🗑️ Skipped Non-Food/Med India News: {title}")
+                        continue
+                        
                     # Extract entities (basic regex from NLP engine)
                     analysis["entities"] = NLPEngine.extract_entity_candidates(full_text)
                     

@@ -15,6 +15,16 @@ class NLPEngine:
         "bis", "morth", "dgca", "rupee", "rs."
     }
 
+    # 5.4 Stage 4: Food & Medicine Context (Strict Filtering)
+    FOOD_MED_KEYWORDS = {
+        "food", "drink", "beverage", "snack", "spice", "dairy", "meat", 
+        "candy", "chocolate", "grocery", "restaurant", "fssai", "dietary",
+        "supplement", "medicine", "drug", "pharma", "pharmacy", "pill", 
+        "tablet", "syrup", "cdsco", "fda", "eating", "consumption", "poisoning",
+        "adulteration", "adulterated", "sweet", "milk", "ghee", "khoya",
+        "paneer", "oil", "water", "juice", "bakery", "masala"
+    }
+
     @classmethod
     def analyze_text(cls, text: str) -> Dict[str, Any]:
         text_lower = text.lower()
@@ -37,12 +47,22 @@ class NLPEngine:
         
         is_india = region_score > 0 
 
+        # 3. Food/Medicine Context Detection
+        food_med_score = 0
+        for kw in cls.FOOD_MED_KEYWORDS:
+            if re.search(rf'\b{re.escape(kw)}\b', text_lower):
+                food_med_score += 1
+                
+        is_food_med = food_med_score > 0
+
         return {
             "is_recall": is_recall,
             "intent_score": intent_score,
             "intent_keywords": found_keywords,
             "is_india": is_india,
-            "region_score": region_score
+            "region_score": region_score,
+            "is_food_med": is_food_med,
+            "food_med_score": food_med_score
         }
 
     @classmethod
