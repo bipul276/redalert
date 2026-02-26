@@ -17,9 +17,14 @@ async def lifespan(app: FastAPI):
     # Startup
     init_db()
     scheduler = AsyncIOScheduler()
+    
+    # Run immediately on startup
+    scheduler.add_job(run_ingestion_cycle, "date")
+    
+    # And then run every 12 hours
     scheduler.add_job(run_ingestion_cycle, "interval", hours=12)
     scheduler.start()
-    print("🕒 Scheduler started: Ingestion pipeline runs every 12 hours.")
+    print("🕒 Scheduler started: Ingestion pipeline running now and every 12 hours.")
     yield
     # Shutdown
     scheduler.shutdown()

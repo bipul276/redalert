@@ -174,6 +174,10 @@ That's it — Docker rebuilds only what changed.
 
 ## Trigger Data Ingestion
 
+The scheduler **runs automatically on boot** and then every 12 hours. The dashboard will populate with data within ~30-60 seconds of `docker compose up`.
+
+To force a manual run later:
+
 ```bash
 docker compose exec backend python scripts/trigger_real_data.py
 ```
