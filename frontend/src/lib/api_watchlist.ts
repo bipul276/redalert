@@ -1,6 +1,4 @@
-// Ideally use env var, but for MVP absolute localhost URL is safe for both client/server in this setup
-// Ideally use env var, but for MVP absolute localhost URL is safe for both client/server in this setup
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+import { API_BASE } from "./api";
 
 export interface WatchlistItem {
     id?: number;
@@ -10,9 +8,14 @@ export interface WatchlistItem {
 }
 
 export async function fetchWatchlists(): Promise<WatchlistItem[]> {
-    const res = await fetch(`${API_BASE}/watchlists`, { cache: 'no-store' });
-    if (!res.ok) return [];
-    return res.json();
+    try {
+        const res = await fetch(`${API_BASE}/watchlists`, { cache: 'no-store' });
+        if (!res.ok) return [];
+        return res.json();
+    } catch (error) {
+        console.error(`Error fetching watchlists from ${API_BASE}:`, error);
+        return [];
+    }
 }
 
 export async function addWatchlist(type: string, value: string): Promise<WatchlistItem | null> {

@@ -15,7 +15,11 @@ export interface Recall {
     url?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+export const isServer = typeof window === 'undefined';
+
+export const API_BASE = isServer
+    ? (process.env.INTERNAL_API_URL || "http://127.0.0.1:8000/api/v1")
+    : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1");
 
 export async function fetchRecalls(
     region?: string,
@@ -34,16 +38,19 @@ export async function fetchRecalls(
     status.forEach(s => params.append("status", s.toUpperCase()));
     signalType.forEach(s => params.append("signal_type", s));
 
-    // Next.js: Ensure this fetched on server or client as appropriate.
-    // Using 'no-store' for dynamic data in MVP
-    const res = await fetch(`${API_BASE}/recalls?${params.toString()}`, { cache: 'no-store' });
+    try {
+        const res = await fetch(`${API_BASE}/recalls?${params.toString()}`, { cache: 'no-store' });
 
-    if (!res.ok) {
-        console.error("Failed to fetch recalls");
+        if (!res.ok) {
+            console.error(`Failed to fetch recalls from ${API_BASE}. Status: ${res.status}`);
+            return [];
+        }
+
+        return res.json();
+    } catch (error) {
+        console.error(`Network error fetching recalls from ${API_BASE}:`, error);
         return [];
     }
-
-    return res.json();
 }
 
 // --- AUTHENTICATION ---
