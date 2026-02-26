@@ -1,6 +1,6 @@
 import { Recall } from "./api";
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
 const ADMIN_SECRET = "redalert_admin_secret_123";
 
 export async function updateRecall(id: number, data: Partial<Recall>): Promise<Recall | null> {

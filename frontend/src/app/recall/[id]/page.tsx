@@ -2,12 +2,17 @@ import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
 import { Recall } from "@/lib/api";
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
 
 async function getRecall(id: string): Promise<Recall | null> {
-    const res = await fetch(`${API_BASE}/recalls/${id}`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return res.json();
+    try {
+        const res = await fetch(`${API_BASE}/recalls/${id}`, { cache: 'no-store' });
+        if (!res.ok) return null;
+        return res.json();
+    } catch (e) {
+        console.error("Failed to fetch recall detail:", e);
+        return null;
+    }
 }
 
 export default async function RecallDetailPage({ params }: { params: Promise<{ id: string }> }) {

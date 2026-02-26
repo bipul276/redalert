@@ -42,7 +42,8 @@ export default function AlertsPage() {
 
         if (permission === "granted") {
             // Fetch public key
-            const res = await fetch("http://localhost:8000/api/v1/notifications/vapid-public-key");
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+            const res = await fetch(`${API_BASE}/notifications/vapid-public-key`);
             const { publicKey } = await res.json();
 
             const sub = await reg.pushManager.subscribe({
@@ -51,7 +52,8 @@ export default function AlertsPage() {
             });
 
             // Send to backend
-            await fetch("http://localhost:8000/api/v1/notifications/subscribe", {
+            const API_BASE2 = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+            await fetch(`${API_BASE2}/notifications/subscribe`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

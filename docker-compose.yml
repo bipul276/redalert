@@ -32,6 +32,7 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_MAILTO: ${VAPID_MAILTO:-mailto:admin@redalert.example.com}
     volumes:
       - totp_key:/app/.totp_key_volume
 
