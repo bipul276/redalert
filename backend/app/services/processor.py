@@ -58,7 +58,7 @@ class RecallProcessor:
                         "how it works", "how to", "feature update", "eligible for this", "watch face", "ios", "android" # Tech Tutorials
                     ]
                     
-                    if any(nk in lower_full_text for nk in noise_keywords):
+                    if any(re.search(rf'\b{re.escape(nk)}\b', lower_full_text) for nk in noise_keywords):
                         logger.info(f"🗑️ Skipped Noise: {title}")
                         continue
 
@@ -76,17 +76,22 @@ class RecallProcessor:
                         "usa", "u.s.", "united states", "canada", "ontario", "toronto", "vancouver", "montreal",
                         "nigeria", "africa", "japan", "australia", "sydney", "melbourne", "brisbane",
                         "uk", "united kingdom", "london", "dublin", "ireland", "new zealand", "europe",
-                        "fda", "cpsc", "hsa", "singapore", "tga", "california", "texas",
+                        "fda", "cpsc", "hsa", "singapore", "tga", "california", "texas", "ohio", "new york",
                         "venezuela", "maduro", "white house", "sanctions", "oil tanker", "shipping firms",
                         "russia", "ukraine", "war", "military", "army", "navy", "air force", "troops", "deployed"
                     ]
                     
-                    has_foreign_mention = any(fk in lower_full_text for fk in foreign_keywords)
+                    has_foreign_mention = any(re.search(rf'\b{re.escape(fk)}\b', lower_full_text) for fk in foreign_keywords)
                     
-                    if (analysis["is_india"] or is_india_source) and not has_foreign_mention:
+                    # If it came from a US source specifically, force it to US unless it strongly screams India.
+                    # But if it came from a US source, it's almost certainly US.
+                    if source_origin == "GoogleNews-US" or has_foreign_mention:
+                        region = Region.US
+                    elif is_india_source or analysis["is_india"]:
                         region = Region.IN
                     else:
-                        region = Region.US
+                        region = Region.US # Default fallback
+
                     
                     # Signal Logic (India Specific)
                     signal_type = None

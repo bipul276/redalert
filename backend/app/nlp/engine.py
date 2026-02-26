@@ -23,7 +23,7 @@ class NLPEngine:
         intent_score = 0
         found_keywords = []
         for kw in cls.RECALL_KEYWORDS:
-            if kw in text_lower:
+            if re.search(rf'\b{re.escape(kw)}\b', text_lower):
                 intent_score += 1
                 found_keywords.append(kw)
         
@@ -32,7 +32,7 @@ class NLPEngine:
         # 2. Region Detection
         region_score = 0
         for kw in cls.INDIA_KEYWORDS:
-            if kw in text_lower:
+            if re.search(rf'\b{re.escape(kw)}\b', text_lower):
                 region_score += 1
         
         is_india = region_score > 0 
