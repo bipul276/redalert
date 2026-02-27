@@ -45,6 +45,8 @@ services:
     restart: always
     depends_on:
       - backend
+    extra_hosts:
+      - "ralert.duckdns.org:host-gateway"
     ports:
       - "3000:3000"
     environment:
