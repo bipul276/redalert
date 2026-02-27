@@ -15,6 +15,9 @@ RedAlert aggregates, standardizes, and scores product safety alerts from governm
 *   **USA**: Direct integration with **CPSC**, **FDA**, and **NHTSA**.
 *   **India**: NLP pipeline detecting signals ("Unsafe", "Banned", "Seized") from **Google News**, **FSSAI**, and **CDSCO**.
 
+### ⚖️ Heuristic Region Scoring Engine (USP)
+*   **Context-Aware Categorization**: Resolves the "Swiss Chocolate Leak" problem. If an article titled *"India bans imported Swiss chocolate"* is published, the NLP engine dynamically ranks `india_score` vs `foreign_score` (+5 for FDA/FSSAI, +2 for cities/nations) to correctly attribute the recall to India, without being tricked by foreign substrings.
+
 ### 🧠 Confidence Engine
 *   **Confirmed**: Official regulatory orders.
 *   **Probable**: Validated reports from multiple major outlets.
@@ -29,31 +32,20 @@ RedAlert aggregates, standardizes, and scores product safety alerts from governm
 
 ## 🚀 Deployment Guide
 
-### Manual Setup (DigitalOcean Droplet)
+### Production Server (VPS / Ubuntu)
+RedAlert is fully Dockerized for production. For a step-by-step guide on deploying to a live server (including Nginx reverse proxy and SSL setup), please refer to the accompanying **[Deployment Guide](deployment_guide.md)**.
 
-#### 1. Backend (Python/FastAPI)
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
+### Local Development
+To run the full stack locally for testing new features or debugging, use the provided PowerShell script. **Do not delete this script; it is crucial for a smooth local development workflow.**
 
-pip install -r requirements.txt
-
-# Initialize DB & Create Admin
-python scripts/init_db.py
-python scripts/create_admin.py  # Interactive Setup (Scan QR Code)
-
-# Start Server
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+```powershell
+# In the project root:
+.\start_local.ps1
 ```
-
-#### 2. Frontend (Next.js)
-```bash
-cd frontend
-npm install
-npm run build
-npm start
-```
+This script will:
+1. Spin up a local PostgreSQL database via Docker.
+2. Activate your Python backend virtual environment and launch `uvicorn` with hot-reloading.
+3. Install frontend Node modules and start the Next.js frontend with hot-reloading.
 
 ---
 
@@ -90,15 +82,12 @@ npm start
 
 ## 🤖 Automation
 
-The backend includes an **Async Scheduler** that runs every **12 hours** to:
-1.  Fetch latest RSS feeds from 8+ sources.
-2.  De-duplicate entries against existing database.
-3.  Process NLP signals and update confidence scores.
+The backend includes an **Async Scheduler** that runs every **12 hours** to fetch the latest RSS feeds and run NLP deduplication.
 
-To force a run manually:
+To forcefully wipe the database and trigger a fresh local ingestion pipeline immediately, run:
 ```bash
-# In backend/
-python scripts/trigger_real_data.py
+# In project root:
+.\backend\venv\Scripts\python .\backend\scripts\hard_reset.py
 ```
 
 ---

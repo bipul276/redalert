@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-redalert}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-redalert}
       POSTGRES_DB: ${POSTGRES_DB:-redalert}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -30,9 +28,9 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-redalert}:${POSTGRES_PASSWORD:-redalert}@db:5432/${POSTGRES_DB:-redalert}
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_MAILTO: ${VAPID_MAILTO:-mailto:admin@redalert.example.com}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Set VAPID_PUBLIC_KEY in .env}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Set VAPID_PRIVATE_KEY in .env}
+      VAPID_MAILTO: ${VAPID_MAILTO:?Set VAPID_MAILTO in .env}
     volumes:
       - totp_key:/app/.totp_key_volume
 

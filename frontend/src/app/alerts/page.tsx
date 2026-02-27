@@ -44,12 +44,38 @@ export default function AlertsPage() {
             // Fetch public key
             const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
             const res = await fetch(`${API_BASE}/notifications/vapid-public-key`);
-            const { publicKey } = await res.json();
 
-            const sub = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(publicKey)
-            });
+            if (!res.ok) {
+                alert("Push notifications are not configured. Please set VAPID keys in the backend .env file.");
+                return;
+            }
+
+            const { publicKey } = await res.json();
+            const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+            let sub;
+            try {
+                sub = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey
+                });
+            } catch (err: any) {
+                if (err.name === 'InvalidStateError') {
+                    // Browser still holds an old subscription with a different key.
+                    // Let's clear it and try again immediately.
+                    console.log("Stale push subscription found. Unsubscribing...");
+                    const existingSub = await reg.pushManager.getSubscription();
+                    if (existingSub) {
+                        await existingSub.unsubscribe();
+                    }
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey
+                    });
+                } else {
+                    throw err;
+                }
+            }
 
             // Send to backend
             const API_BASE2 = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";

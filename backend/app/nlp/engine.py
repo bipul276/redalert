@@ -10,9 +10,25 @@ class NLPEngine:
     }
 
     # 5.3 Stage 3: Region Applicability
-    INDIA_KEYWORDS = {
-        "india", "indian", "delhi", "mumbai", "bangalore", "fssai", 
+    INDIA_HIGH_SCORE_KEYWORDS = {
+        "fssai", "cdsco", "drug controller", "state fda"
+    }
+    
+    INDIA_LOW_SCORE_KEYWORDS = {
+        "india", "indian", "delhi", "mumbai", "bangalore", "telangana", 
         "bis", "morth", "dgca", "rupee", "rs."
+    }
+    
+    FOREIGN_HIGH_SCORE_KEYWORDS = {
+        "swissmedic", "fda", "mhra", "hsa", "tga", "cpsc", "cfia"
+    }
+
+    FOREIGN_LOW_SCORE_KEYWORDS = {
+        "usa", "u.s.", "united states", "canada", "ontario", "toronto", "vancouver", "montreal",
+        "nigeria", "africa", "japan", "australia", "sydney", "melbourne", "brisbane",
+        "uk", "united kingdom", "london", "dublin", "ireland", "new zealand", "europe", "eu",
+        "california", "texas", "ohio", "new york",
+        "russia", "ukraine", "swiss", "switzerland", "china"
     }
 
     # 5.4 Stage 4: Food & Medicine Context (Strict Filtering)
@@ -39,13 +55,26 @@ class NLPEngine:
         
         is_recall = intent_score > 0 # Hard gate: must have at least one keyword
 
-        # 2. Region Detection
-        region_score = 0
-        for kw in cls.INDIA_KEYWORDS:
+        # 2. Region Scoring (Replaces simple booleans)
+        india_score = 0
+        for kw in cls.INDIA_HIGH_SCORE_KEYWORDS:
             if re.search(rf'\b{re.escape(kw)}\b', text_lower):
-                region_score += 1
+                india_score += 5
         
-        is_india = region_score > 0 
+        for kw in cls.INDIA_LOW_SCORE_KEYWORDS:
+            if re.search(rf'\b{re.escape(kw)}\b', text_lower):
+                india_score += 2
+                
+        foreign_score = 0
+        for kw in cls.FOREIGN_HIGH_SCORE_KEYWORDS:
+            if re.search(rf'\b{re.escape(kw)}\b', text_lower):
+                foreign_score += 5
+                
+        for kw in cls.FOREIGN_LOW_SCORE_KEYWORDS:
+            if re.search(rf'\b{re.escape(kw)}\b', text_lower):
+                foreign_score += 2
+
+        is_india = india_score >= 5 and india_score >= (foreign_score + 2)
 
         # 3. Food/Medicine Context Detection
         food_med_score = 0
@@ -60,7 +89,8 @@ class NLPEngine:
             "intent_score": intent_score,
             "intent_keywords": found_keywords,
             "is_india": is_india,
-            "region_score": region_score,
+            "india_score": india_score,
+            "foreign_score": foreign_score,
             "is_food_med": is_food_med,
             "food_med_score": food_med_score
         }

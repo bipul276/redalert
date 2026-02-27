@@ -68,8 +68,14 @@ class RecallProcessor:
                     # STRICT FILTER: For India (which relies on broad news scraping), 
                     # we ONLY care about food, medicine, and consumable safety. 
                     # If it lacks context, drop it immediately to prevent political/general news.
-                    source_origin = payload.get("_source_origin", "")
-                    is_india_source = "IN" in source_origin or "India" in source_origin
+                    source_origin = (payload.get("_source_origin") or "").strip()
+                    o = source_origin.lower()
+                    is_india_source = (
+                        bool(re.search(r'(?<![a-z0-9])india(?![a-z0-9])', o)) or
+                        bool(re.search(r'(?<![a-z0-9])in(?![a-z0-9])', o)) or
+                        bool(re.search(r'\bgooglenews[-_ ]?in\b', o)) or
+                        bool(re.search(r'\bgnews[-_ ]?in\b', o))
+                    )
                     
                     if (is_india_source or analysis["is_india"]) and not analysis["is_food_med"]:
                         logger.info(f"🗑️ Skipped Non-Food/Med India News: {title}")
@@ -79,29 +85,29 @@ class RecallProcessor:
                     analysis["entities"] = NLPEngine.extract_entity_candidates(full_text)
                     
                     # 3. Signals & Region Logic
-                    source_origin = payload.get("_source_origin", "")
-                    is_india_source = "IN" in source_origin or "India" in source_origin
+                    o = source_origin.lower()
                     
-                    # Foreign Exclusion Logic
-                    foreign_keywords = [
-                        "usa", "u.s.", "united states", "canada", "ontario", "toronto", "vancouver", "montreal",
-                        "nigeria", "africa", "japan", "australia", "sydney", "melbourne", "brisbane",
-                        "uk", "united kingdom", "london", "dublin", "ireland", "new zealand", "europe",
-                        "fda", "cpsc", "hsa", "singapore", "tga", "california", "texas", "ohio", "new york",
-                        "venezuela", "maduro", "white house", "sanctions", "oil tanker", "shipping firms",
-                        "russia", "ukraine", "war", "military", "army", "navy", "air force", "troops", "deployed"
-                    ]
+                    india_score = analysis["india_score"]
+                    foreign_score = analysis["foreign_score"]
                     
-                    has_foreign_mention = any(re.search(rf'\b{re.escape(fk)}\b', lower_full_text) for fk in foreign_keywords)
-                    
-                    # If it came from a US source specifically, force it to US unless it strongly screams India.
-                    # But if it came from a US source, it's almost certainly US.
-                    if source_origin == "GoogleNews-US" or has_foreign_mention:
-                        region = Region.US
-                    elif is_india_source or analysis["is_india"]:
+                    # Boost India score if the feed origin is explicitly Indian
+                    if bool(re.search(r'(?<![a-z0-9])india(?![a-z0-9])', o)) or \
+                       bool(re.search(r'(?<![a-z0-9])in(?![a-z0-9])', o)) or \
+                       bool(re.search(r'\bgooglenews[-_ ]?in\b', o)) or \
+                       bool(re.search(r'\bgnews[-_ ]?in\b', o)):
+                        india_score += 2
+                        
+                    # Boost Region.US (Foreign) if explicitly from a US feed
+                    if source_origin == "GoogleNews-US":
+                        foreign_score += 5
+
+                    # Score-based assignment logic
+                    if india_score >= 5 and india_score >= (foreign_score + 2):
                         region = Region.IN
+                    elif foreign_score >= 3:
+                        region = Region.US  # Acting as OTHER/Foreign for now
                     else:
-                        region = Region.US # Default fallback
+                        region = Region.US  # Default fallback (UNKNOWN)
 
                     
                     # Signal Logic (India Specific)
