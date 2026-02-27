@@ -3,6 +3,8 @@ services:
     image: postgres:16
     container_name: redalert_postgres
     restart: always
+    ports:
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-redalert}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-redalert}
