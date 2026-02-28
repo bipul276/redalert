@@ -105,17 +105,17 @@ class RecallProcessor:
                     if india_score >= 5 and india_score >= (foreign_score + 2):
                         region = Region.IN
                     elif foreign_score >= 3:
-                        region = Region.US  # Acting as OTHER/Foreign for now
+                        region = Region.US
                     else:
-                        region = Region.US  # Default fallback (UNKNOWN)
+                        region = Region.GLOBAL  # Default fallback
 
                     
                     # Signal Logic (India Specific)
                     signal_type = None
                     confidence = ConfidenceLevel.WATCH # Default
 
-                    # US Defaults
-                    if region == Region.US:
+                    # US and GLOBAL Defaults
+                    if region != Region.IN:
                          score = ConfidenceScorer.calculate_score(raw.source_type, analysis)
                          confidence = ConfidenceScorer.get_bucket(score)
                     else:
