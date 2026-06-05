@@ -9,7 +9,62 @@ RedAlert aggregates, standardizes, and scores product safety alerts from governm
 
 ---
 
-## 🌟 Key Features
+## � Purpose & Vision
+
+Consumers and regulatory watchdogs face a fragmented landscape. Safety alerts, product bans, and recalls are scattered across disparate government websites (like the FDA, CPSC, NHTSA in the US, or FSSAI and CDSCO in India) and local news outlets. 
+
+**RedAlert** aims to solve this by centralizing global product safety data. By leveraging automated data ingestion pipelines and Natural Language Processing (NLP), RedAlert acts as an intelligent early-warning system and a unified dashboard to keep communities safe.
+
+---
+
+## 🏗️ System Architecture & Design
+
+The platform uses a modern, decoupled architecture designed for high throughput background processing and responsive user experiences:
+
+*   **Frontend (Next.js Application)**: A responsive, SSR-enabled React frontend providing the user dashboard, search interfaces, and secure admin panels.
+*   **Backend API (FastAPI - Python)**: A high-performance asynchronous REST API that serves data to the frontend, handles authentication, and triggers manual ingestion workflows.
+*   **Ingestion & Scraping Pipeline**: A background scheduler running every 12 hours that pulls RSS feeds, scrapes official databases, and standardizes incoming data.
+*   **NLP & Scoring Engine**: Processes unstructured news data to extract safety signals, deduplicate entries, and assign confidence scores.
+*   **Database (PostgreSQL)**: Stores canonical recall data, raw payloads, and user/admin credentials safely.
+
+```mermaid
+graph LR
+    subgraph Data Sources
+        US[US Govt: FDA, CPSC]
+        IN[India Govt: FSSAI]
+        News[Google News RSS]
+    end
+
+    subgraph Backend - FastAPI
+        Ingestion[Data Ingestors & Scrapers]
+        NLP[NLP & Scoring Engine]
+        API[REST API Endpoints]
+        Auth[Security Auth & 2FA]
+    end
+
+    subgraph Storage
+        DB[(PostgreSQL)]
+    end
+
+    subgraph Frontend - Next.js
+        Dashboard[Public Dashboard]
+        Admin[Secure Admin Panel]
+    end
+
+    US --> Ingestion
+    IN --> Ingestion
+    News --> Ingestion
+    Ingestion --> NLP
+    NLP --> DB
+    API <--> DB
+    API <--> Dashboard
+    API <--> Admin
+    Auth --> Admin
+```
+
+---
+
+## �🌟 Key Features
 
 ### 🌍 Multi-Region Intelligence
 *   **USA**: Direct integration with **CPSC**, **FDA**, and **NHTSA**.
@@ -33,7 +88,7 @@ RedAlert aggregates, standardizes, and scores product safety alerts from governm
 ## 🚀 Deployment Guide
 
 ### Production Server (VPS / Ubuntu)
-RedAlert is fully Dockerized for production. For a step-by-step guide on deploying to a live server (including Nginx reverse proxy and SSL setup), please refer to the accompanying **[Deployment Guide](deployment_guide.md)**.
+RedAlert is fully Dockerized for production. For a step-by-step guide on deploying to a live server (including Nginx reverse proxy, SSL setup, and environment configuration), please refer to the accompanying **[Deployment Guide](DEPLOYMENT.md)**.
 
 ### Local Development
 To run the full stack locally for testing new features or debugging, use the provided PowerShell script. **Do not delete this script; it is crucial for a smooth local development workflow.**
@@ -64,11 +119,13 @@ This script will:
 
 > **TOTP Encryption Key**: Auto-generated in `backend/.totp_key` on first admin creation. Keep this file safe.
 
-### Frontend (`frontend/.env.local`)
+### Frontend (`frontend/.env.local` / `.env.production`)
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `NEXT_PUBLIC_API_URL` | Backend API URL | `http://127.0.0.1:8000/api/v1` |
+
+*(See `.env.production.example` for production variable guidelines).*
 
 ---
 
